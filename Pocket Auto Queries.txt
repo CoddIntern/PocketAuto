@@ -1,0 +1,306 @@
+
+
+select distinct b.user_id, b.install_date, b.event_date, b.funnel_step, b.Notification_type, b.Deal_type,
+        b.medium, b.user_source, b.campaign_source, b.platform, b.Notification_step, b.Dealer, b.Deals,
+        b.flag, b.Notification_date, b.retention, b.uninstalls, a.Lifetime_Dealer, a.users_dealers
+from
+        (    
+        select distinct value.string_value as Lifetime_Dealer, user_pseudo_id as users_dealers, event_date 
+        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h
+        where key = 'DealerId' and value.string_value not like 'none'
+        )a
+right join
+    (
+    select distinct b.user_id, b.install_date, b.event_date, b.funnel_step, b.Notification_type, b.Deal_type,
+                    b.medium, b.user_source, b.campaign_source, b.platform, b.Notification_step, b.Dealer, b.Deals,
+                    b.flag, b.Notification_date, b.retention, a.uninstalls 
+    from
+        (
+        select distinct user_pseudo_id as user_id, event_name as uninstalls, event_date
+        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h
+        where event_name = 'app_clear_data'
+        )a
+    right join 
+            (
+            select b.*,a.flag 
+            from
+                (
+                    select a.*,b.flag
+                    from
+                    (
+                        Select user_pseudo_id user_id,event_date,value.string_value promotion_id
+                        from
+                        (
+                        SELECT  user_pseudo_id,event_date,h.*
+                            FROM `pocketgeek-auto-prod.analytics_248338266.events_*` a , UNNEST(event_params) as h
+                            where a.event_name = 'DealDisplayed'
+                        )a
+                        where key = 'DealId'
+                    )a
+                    left join
+                    (
+                        Select user_pseudo_id user_id,value.string_value promotion_id,1 flag
+                        from
+                        (
+                        SELECT  user_pseudo_id,event_name,h.*
+                            FROM `pocketgeek-auto-prod.analytics_248338266.events_*` a , UNNEST(event_params) as h
+                            where a.event_name = 'DealTapped'
+                        )a
+                        where key = 'PromotionId'
+                    )b
+                    on a.user_id = b.user_id
+                    and a.promotion_id = b.promotion_id
+                )a
+                right join 
+                    (
+                    select distinct a.user_id, b.install_date, a.event_date, b.funnel_step, b.Notification_type, b.Deal_type,
+                        b.medium, b.user_source, b.campaign_source, b.platform, b.Notification_step, b.Dealer, b.Deals,
+                        b.Notification_date, DATE_DIFF(
+                                                        PARSE_DATE('%Y%m%d', a.event_date), 
+                                                        PARSE_DATE('%Y%m%d', b.install_date), 
+                                                        DAY) as retention
+                    from
+                        (
+                            SELECT distinct user_pseudo_id as user_id,  event_date
+                            FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h
+                        )a
+                    left join 
+                            (
+                                select distinct user_id, install_date, event_date, funnel_step, Notification_type, Deal_type, medium, 
+                                        user_source, campaign_source, platform, Dealer, Notification_date, Notification_step, Deals
+                                        
+                                from
+                                    (                        
+                                    select distinct user_id, install_date, event_date, funnel_step, Notification_type, Deal_type, medium, 
+                                            user_source, campaign_source, platform, Dealer, Notification_date, Notification_step, Deals
+                                        
+                                    from
+                                        (
+                                        select distinct b.user_id, b.install_date, b.event_date, b.funnel_step, b.Notification_type, b.Deal_type, b.medium, 
+                                            b.user_source, b.campaign_source, b.platform, b.Dealer, 
+                                            case when a.Deals IN ('100$ off new purchas','100$ off new purcha') then '100$ off new purchase' else a.Deals End Deals, 
+                                            b.Notification_date, b.Notification_step
+                                        from
+                                            (
+                                            SELECT distinct user_pseudo_id as user_id,event_date,value.string_value as Deals    
+                                            FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                            where  key = 'DealTitle'
+                                            )a 
+                                        right join           
+                                            (
+                                            select distinct b.user_id, b.install_date, b.event_date, b.funnel_step, b.Notification_type, b.Deal_type, b.medium, 
+                                                    b.user_source, b.campaign_source, b.platform, 
+                                                    case when b.Dealer IN ('000TX002','000tx002') then '000TX002' else b.Dealer End Dealer, 
+                                                    a.Notification_date, a.Notification_step
+                                            from
+                                                (
+                                                SELECT user_pseudo_id as user_id,min(event_date)Notification_date,'Notification Received' Notification_step    
+                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                        where  event_name = 'NotificationReceived'
+                                                group by 1
+                                                union all
+                                                SELECT user_pseudo_id as user_id,min(event_date)Notification_date,'Notification Dismissed' Notification_step    
+                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                        where  event_name = 'NotificationDismissed' 
+                                                group by 1
+                                                union all
+                                                SELECT user_pseudo_id as user_id,min(event_date)Notification_date,'Notification Opened' Notification_step    
+                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                        where  event_name = 'NotificationOpened'
+                                                group by 1
+                                                )a
+                                            right join
+                                                (        
+                                                select distinct b.user_id, b.install_date, b.event_date, b.funnel_step, b.Notification_type, b.Deal_type, b.medium, 
+                                                        b.user_source, b.campaign_source, b.platform, a.Dealer
+                                                from      
+                                                    (
+                                                    select distinct user_Pseudo_id as user_id,  event_date, value.string_value as Dealer
+                                                    FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h
+                                                    where key = 'DealerId' and value.string_value not like 'none'
+                                                    )a    
+                                                right join
+                                                (
+                                                select distinct b.user_id, b.install_date, b.event_date, b.funnel_step, b.Notification_type, b.medium, 
+                                                    b.user_source, b.campaign_source, b.platform, a.Deal_type 
+                                                from    
+                                                    (
+                                                    SELECT distinct user_pseudo_id as user_id,event_date,'Service Deals' Deal_type    
+                                                            FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                            where  key = 'DealType'  and value.string_value like '%SERVICE'
+                                                    union all
+                                                    SELECT distinct user_pseudo_id as user_id,event_date,'Sales Deals' Deal_type    
+                                                            FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                            where  key = 'DealType'  and value.string_value like '%SALES'
+                                                    )a
+                                                    right join
+                                                    (
+                                                    Select b.user_id, b.install_date, b.event_date, b.funnel_step, b.medium, b.user_source,
+                                                        b.campaign_source, b.platform, a.Notification_type 
+                                                    from   
+                                                        (
+                                                        select user_pseudo_id as user_id, event_date, Notification_type 
+                                                        from    
+                                                            (
+                                                            SELECT distinct user_pseudo_id,event_date,'Transfer Requested' Notification_type    
+                                                                    FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                    where  key = 'NotificationType'  and value.string_value = 'NotificationType.TransferRequested'
+                                                            union all
+                                                            SELECT distinct user_pseudo_id,event_date,'Credit Added' Notification_type    
+                                                                    FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                    where  key = 'NotificationType'  and value.string_value = 'NotificationType.CreditAdded'
+                                                            union all
+                                                            SELECT distinct user_pseudo_id,event_date,'No Type' Notification_type    
+                                                                    FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                    where  key = 'NotificationType'  and value.string_value = 'NotificationType.None'
+                                                            union all
+                                                            SELECT distinct user_pseudo_id,event_date,'Car Updated' Notification_type    
+                                                                    FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                    where  key = 'NotificationType'  and value.string_value = 'NotificationType.CarUpdated'
+                                                            union all
+                                                            SELECT distinct user_pseudo_id,event_date,'Mileage Updated' Notification_type    
+                                                                    FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                    where  key = 'NotificationType'  and value.string_value = 'NotificationType.MileageUpdated'
+                                                            union all
+                                                            SELECT distinct user_pseudo_id,event_date,'New Credit Added' Notification_type   
+                                                                    FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                    where  key = 'NotificationType'  and value.string_value = 'NotificationType.NewCreditAdded'
+                                                            union all
+                                                            SELECT distinct user_pseudo_id,event_date,'Recall Added' Notification_type    
+                                                                    FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                    where  key = 'NotificationType'  and value.string_value = 'NotificationType.RecallAdded'
+                                                            union all
+                                                            SELECT distinct user_pseudo_id,event_date,'Transfer Accepted' Notification_type    
+                                                                    FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                    where  key = 'NotificationType'  and value.string_value = 'NotificationType.TransferAccepted'
+                                                            union all
+                                                            SELECT distinct user_pseudo_id,event_date,'Transfer Cancelled' Notification_type    
+                                                                    FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                    where  key = 'NotificationType'  and value.string_value = 'NotificationType.TransferCancelled'
+                                                            )
+                                                        )a
+                                                        right join 
+                                                            (
+                                                            Select a.user_pseudo_id as user_id, b.install_date, a.event_date, a.funnel_step, b.medium, b.user_source,
+                                                            b.campaign_source, b.platform
+                                                            from
+                                                                (
+                                                                SELECT user_pseudo_id,min(event_date)event_date, 'Installs' funnel_step           
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h
+                                                                        where  event_name = 'firebase_campaign'
+                                                                        and key = 'source'
+                                                                Group by user_pseudo_id
+                                                                union all 
+                                                                SELECT user_pseudo_id,min(event_date)event_date,'Terms Displayed' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'TermsDisplayed'  
+                                                                Group by user_pseudo_id     
+                                                                union all
+                                                                SELECT user_pseudo_id,min(event_date)event_date,'Terms Agreed To' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'TermsAgreedTo'  
+                                                                Group by user_pseudo_id 
+                                                                union all
+                                                                SELECT user_pseudo_id,min(event_date)event_date,'Registration' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'OnboardingPhoneNumberVerified'  
+                                                                Group by user_pseudo_id
+                                                                union all
+                                                                SELECT user_pseudo_id,min(event_date)event_date,'Dealer Added' funnel_step   
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'DealerSelected'  
+                                                                Group by user_pseudo_id
+                                                                union all
+                                                                    SELECT user_pseudo_id,min(event_date)event_date,'Vehicle Added' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'AddVehicle' and key = 'VehicleId' and value.string_value not like 'none'
+                                                                Group by user_pseudo_id
+                                                                union all 
+                                                                SELECT user_pseudo_id as user_id,min(event_date)event_date1,'QR Code' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'OnboardingCaptureIvtQRCodeWithDeepLink' 
+                                                                Group by user_pseudo_id 
+                                                                union all
+                                                                SELECT distinct user_pseudo_id,event_date,'Deals Displayed' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'DealDisplayed'
+                                                                union all
+                                                                SELECT distinct user_pseudo_id,event_date,'Deals Tapped' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where event_name = 'DealTapped'
+                                                                union all 
+                                                                SELECT distinct user_pseudo_id,event_date,'Deals Bookmarked' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where event_name = 'DealBookmarked'
+                                                                union all 
+                                                                SELECT distinct user_pseudo_id,event_date,'Personal TechPro Called' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'TechProCallButtonPressed'
+                                                                union all 
+                                                                SELECT distinct user_pseudo_id,event_date,'Dealer Called' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'CallDealer'
+                                                                union all 
+                                                                SELECT distinct user_pseudo_id,event_date,'Dealer Recalled' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'RecallTapOpen'
+                                                                union all 
+                                                                SELECT distinct user_pseudo_id,event_date,'Repair Shop Called' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'CallRepairShop'
+                                                                union all 
+                                                                SELECT distinct user_pseudo_id,event_date,'Maintenance Completed' funnel_step    
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h        
+                                                                        where  event_name = 'TapCompletedMaintenance'
+                                                                )a   
+                                                                left join
+                                                                    (
+                                                                            SELECT b.user_id,a.event_date as install_date
+                                                                        ,max(case when key = 'campaign_info_source' then value.string_value end) as campaign_source
+                                                                        ,max(case when key = 'firebase_screen_class' then value.string_value end) as screen_source_type
+                                                                        ,max(case when key = 'firebase_screen' then value.string_value end) as screen_source
+                                                                        ,max(case when key = 'medium' then value.string_value end) as medium
+                                                                        ,max(case when key = 'source' then value.string_value end) as user_source
+                                                                        ,min(case when key = 'source' then platform end) as platform
+                                                                        FROM `pocketgeek-auto-prod.analytics_248338266.events_*` a , UNNEST(event_params) as h
+                                                                    join
+                                                                        (
+                                                                            SELECT user_pseudo_id as user_id,min(event_timestamp)event_date
+                                                                            FROM `pocketgeek-auto-prod.analytics_248338266.events_*` , UNNEST(event_params) as h
+                                                                            where  event_name = 'firebase_campaign'
+                                                                            and key = 'source'
+                                                                            group by 1
+                                                                        )b
+                                                                    on a.user_pseudo_id = b.user_id
+                                                                    and a.event_timestamp = b.event_date
+                                                                    where  a.event_name = 'firebase_campaign'
+                                                                    group by 1,2
+                                                                )b 
+                                                                on a.user_pseudo_id = b.user_id
+                                                            )b
+                                                            on a.user_id = b.user_id
+                                                            and a.event_date = b.event_date
+                                                        )b
+                                                        on a.user_id = b.user_id 
+                                                        and a.event_date = b.event_date
+                                                    )b
+                                                    on a.user_id = b.user_id 
+                                                    and a.event_date = b.event_date
+                                                )b
+                                                on a.user_id = b.user_id
+                                            )b
+                                            on a.user_id = b.user_id 
+                                            and a.event_date = b.event_date
+                                        )
+                                    )
+                                )b
+                                on a.user_id = b.user_id
+                            )b 
+                            on a.user_id = b.user_id 
+                            and a.event_date = b.event_date
+                        )b
+                        on a.user_id = b.user_id 
+                        and a.event_date = b.event_date
+                    )b
+                    on a.event_date = b.event_date
+                    and b.user_id = a.users_dealers
